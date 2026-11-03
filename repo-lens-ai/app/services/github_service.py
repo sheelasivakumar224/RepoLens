@@ -1,5 +1,6 @@
 from urllib.parse import urlparse
 from github import Github, GithubException
+from app.schemas.repository import RepositoryInfo
 
 def validate_github_url(url:str) -> bool:
     parsed_url = urlparse(url)
@@ -25,12 +26,12 @@ def validate_github_url(url:str) -> bool:
 
     return True
 
-def verify_github_repository(url: str) -> dict:
+def verify_github_repository(url: str) -> RepositoryInfo:
     if not validate_github_url(url):
-        return {
-            "exists" : False,
-            "message" :"Invalid Github repository URL"
-        }
+        return RepositoryInfo(
+            exists=False,
+            message="Invalid Github repository URL"
+        )
 
     parsed_url = urlparse(url)
     owner, repository = parsed_url.path.strip("/").split("/")
@@ -42,17 +43,17 @@ def verify_github_repository(url: str) -> dict:
     try:
         repo = github.get_repo(f"{owner}/{repository}")
 
-        return {
-            "exists": True,
-            "full_name" : repo.full_name,
-            "description" : repo.description,
-            "private" : repo.private
-        }
+        return RepositoryInfo(
+            exists=True,
+            full_name=repo.full_name,
+            description=repo.description,
+            private=repo.private
+        )
     except GithubException as error:
         if error.status == 404:
-            return {
-                "exists" : False,
-                "message" : "Repository not found or is private"
-            }
+            return RepositoryInfo(
+                exists=False,
+                message="Repository not found or is private"
+            )
 
         raise

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 
 class RepositoryInfo(BaseModel):
     exists: bool
@@ -6,3 +6,6 @@ class RepositoryInfo(BaseModel):
     description: str | None = None
     private: bool | None = None
     message: str | None = None
+
+class RepositoryRequest(BaseModel):
+    url: HttpUrl

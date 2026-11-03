@@ -1,6 +1,7 @@
 import pytest
 
 from app.services.github_service import validate_github_url, verify_github_repository
+from app.schemas.repository import RepositoryInfo
 
 from unittest.mock import Mock, patch
 from github import GithubException
@@ -32,12 +33,12 @@ def test_verify_github_repository_success(mock_github):
 
     result = verify_github_repository("https://github.com/psf/requests")
 
-    assert result == {
-        "exists" : True,
-        "full_name" : "psf/requests",
-        "description" : "A simple, yet elegant HTTP library.",
-        "private" : False
-    }
+    assert result == RepositoryInfo(
+        exists=True,
+        full_name="psf/requests",
+        description="A simple, yet elegant HTTP library.",
+        private=False
+    )
 
 @patch("app.services.github_service.Github")
 def test_verify_github_repository_not_found(mock_github):
@@ -46,10 +47,10 @@ def test_verify_github_repository_not_found(mock_github):
         "https://github.com/unknown/repository"
     )
 
-    assert result == {
-        "exists" : False,
-        "message" : "Repository not found or is private"
-    }
+    assert result == RepositoryInfo(
+        exists=False,
+        message="Repository not found or is private"
+    )
 
 @patch("app.services.github_service.Github")
 def test_verify_github_repository_invalid_url(mock_github):
@@ -57,10 +58,10 @@ def test_verify_github_repository_invalid_url(mock_github):
         "https://google.com/psf/requests"
     )
 
-    assert result == {
-        "exists" : False,
-        "message" : "Invalid Github repository URL"
-    }
+    assert result == RepositoryInfo(
+        exists=False,
+        message="Invalid Github repository URL"
+    )
     mock_github.assert_not_called()
 
 @patch("app.services.github_service.Github")
