@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environment
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+#IDE
+.vscode/
+
+#Logs
+*.log
+
+# Local databases and vector storage
+chroma_db/
+data/
