@@ -2,6 +2,10 @@ import httpx
 from pathlib import PurePosixPath
 import base64
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def get_repository_metadata(owner: str, repository: str) -> dict:
     url = f"https://api.github.com/repos/{owner}/{repository}"
 
@@ -72,8 +76,11 @@ def filter_repository_files(tree: list) -> list:
 
     return filtered_files
 
-def get_file_content(owner: str, repository: str, file_path: str) -> str:
-    url = f"https://api.github.com/repos/{owner}/{repository}/contents/{file_path}"
+def get_file_content(owner: str, repository: str, file_path: str, sha: str, size: int) -> str:
+    if size <= 1024 * 1024:
+        url = f"https://api.github.com/repos/{owner}/{repository}/contents/{file_path}"
+    else:
+        url = f"https://api.github.com/repos/{owner}/{repository}/git/blobs/{sha}"
     response = httpx.get(url, timeout=30)
     response.raise_for_status()
 
@@ -82,6 +89,30 @@ def get_file_content(owner: str, repository: str, file_path: str) -> str:
     if file_data.get("encoding") != "base64":
         raise ValueError("Unsupported file encoding")
 
-    decoded_content = base64.b64decode(file_data["content"])
+    # validate=True: Makes Base64 decoding stricter by rejecting invalid characters instead of silently ignoring them.
+    decoded_content = base64.b64decode(file_data["content"], validate=True)
 
     return decoded_content.decode("utf-8")
+
+def retrieve_repository_files(owner:str, repository: str, files: list) -> dict:
+
+    successful_files = []
+    failed_files = []
+
+    for file in files:
+        file_path = file["path"]
+
+        try:
+            content = get_file_content(owner = owner, repository = repository, file_path = file_path, sha=file["sha"], size=file["size"])
+            successful_files.append({"path": file_path, "content": content, "size": file["size"]})
+            logger.info("Successfully retrieved %s", file_path)
+
+        except (httpx.HTTPError, ValueError, KeyError) as error:
+            failed_files.append({"path": file_path, "error": str(error)})
+            logger.error("Failed to retrieve %s: %s", file_path, error)
+
+
+    return {
+        "successful_files" : successful_files,
+        "failed_files" : failed_files
+    }
