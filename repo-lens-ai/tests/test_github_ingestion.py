@@ -3,14 +3,21 @@ from app.ingestion.github_ingestion import (
     get_repository_tree,
     get_file_content,
     filter_repository_files,
-    retrieve_repository_files
+    retrieve_repository_files, verify_github_authentication
 )
+
+from app.ingestion.github_ingestion import GITHUB_HEADERS
 
 from unittest.mock import patch
 
 import pytest
 import binascii
 import httpx
+
+from app.main import app
+from fastapi.testclient import TestClient
+
+
 
 def test_filter_repository_files():
     tree = [
@@ -90,7 +97,7 @@ def test_get_file_content_small_file():
           expected_url = "https://api.github.com/repos/psf/requests/contents/README.md"
 
         # assert_called_once_with: was the mocked function called exactly once with the expected arguments.
-          mock_get.assert_called_once_with(expected_url, timeout=30)
+          mock_get.assert_called_once_with(expected_url, headers=GITHUB_HEADERS, timeout=30)
 
 def test_get_file_content_large_file():
      with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
@@ -112,7 +119,7 @@ def test_get_file_content_large_file():
 
           expected_url = "https://api.github.com/repos/psf/requests/git/blobs/xyz789"
 
-          mock_get.assert_called_once_with(expected_url, timeout=30)
+          mock_get.assert_called_once_with(expected_url, headers=GITHUB_HEADERS, timeout=30)
 
 def test_get_file_content_invalid_base64():
      with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
@@ -146,9 +153,10 @@ def test_get_repository_metadata():
                owner="psf", repository="requests"
           )
 
+          assert mock_get.call_args.kwargs["headers"] == GITHUB_HEADERS
           assert result == expected_metadata
 
-          mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests", timeout=30)
+          mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests", headers=GITHUB_HEADERS, timeout=30)
 
 def test_get_repository_tree():
      with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
@@ -174,7 +182,7 @@ def test_get_repository_tree():
 
         assert result == expected_tree
 
-        mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests/git/trees/main?recursive=1", timeout=30)
+        mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests/git/trees/main?recursive=1", headers = GITHUB_HEADERS, timeout=30)
 
 def test_retrieve_repository_files_success():
     files = [
@@ -267,4 +275,50 @@ def test_retrieve_repository_files_unexpected_error():
 
           with pytest.raises(TypeError, match="Unexpected programming error"):
                retrieve_repository_files(owner="psf", repository="requests", files=files)
-    
+
+def test_verify_github_authentication_success():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          mock_response = mock_get.return_value
+          mock_response.status_code = 200
+
+          result = verify_github_authentication()
+
+          assert result is True
+          mock_response.raise_for_status.assert_called_once()
+
+def test_verify_github_authentication_failure():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          mock_response = mock_get.return_value
+          mock_response.raise_for_status.side_effect = (
+               httpx.HTTPStatusError(
+                    "401 Unauthorized",
+                    request=httpx.Request("GET", "https://api.github.com/user"),
+                    response=httpx.Response(
+                         401, 
+                         request=httpx.Request("GET", "https://api.github.com/user")
+                    )
+               )
+          )
+
+          with pytest.raises(httpx.HTTPStatusError):
+               verify_github_authentication()
+
+def test_application_startup_fails_without_github_authentication():
+     with patch(
+        "app.main.verify_github_authentication",
+        side_effect=httpx.HTTPStatusError(
+            "401 Unauthorized",
+            request=httpx.Request(
+                "GET", "https://api.github.com/user"
+            ),
+            response=httpx.Response(
+                401,
+                request=httpx.Request(
+                    "GET", "https://api.github.com/user"
+                ),
+            ),
+        ),
+    ):
+        with pytest.raises(httpx.HTTPStatusError):
+            with TestClient(app):
+                pass

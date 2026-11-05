@@ -4,12 +4,32 @@ import base64
 
 import logging
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+GITHUB_HEADERS = {
+    "Authorization" : f"Bearer {GITHUB_TOKEN}",
+    "Accept" : "application/vnd.github+json"
+}
+
+def verify_github_authentication() -> bool:
+    url = "https://api.github.com/user"
+
+    response = httpx.get(url, headers=GITHUB_HEADERS, timeout=30)
+    response.raise_for_status()
+    return True
+
+
 logger = logging.getLogger(__name__)
+
 
 def get_repository_metadata(owner: str, repository: str) -> dict:
     url = f"https://api.github.com/repos/{owner}/{repository}"
 
-    response = httpx.get(url, timeout=30)
+    response = httpx.get(url, headers=GITHUB_HEADERS, timeout=30)
 
     response.raise_for_status()
     return response.json()
@@ -18,7 +38,7 @@ def get_repository_tree(owner: str, repository:str, branch: str) -> list:
     url = (
         f"https://api.github.com/repos/{owner}/{repository}/git/trees/{branch}?recursive=1"
     )
-    response = httpx.get(url, timeout=30)
+    response = httpx.get(url, headers=GITHUB_HEADERS,timeout=30)
     response.raise_for_status()
 
     return response.json()
@@ -81,7 +101,7 @@ def get_file_content(owner: str, repository: str, file_path: str, sha: str, size
         url = f"https://api.github.com/repos/{owner}/{repository}/contents/{file_path}"
     else:
         url = f"https://api.github.com/repos/{owner}/{repository}/git/blobs/{sha}"
-    response = httpx.get(url, timeout=30)
+    response = httpx.get(url, headers=GITHUB_HEADERS,timeout=30)
     response.raise_for_status()
 
     file_data = response.json()
