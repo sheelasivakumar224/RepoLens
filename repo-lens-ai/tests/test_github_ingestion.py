@@ -5,3 +5,266 @@ from app.ingestion.github_ingestion import (
     filter_repository_files,
     retrieve_repository_files
 )
+
+from unittest.mock import patch
+
+import pytest
+import binascii
+import httpx
+
+def test_filter_repository_files():
+    tree = [
+        {
+            "path" : "main.py",
+            "type" : "blob",
+            "size" : 100,
+            "sha" : "abc123"
+        },
+        {
+            "path": "README.md",
+            "type": "blob",
+            "size": 200,
+            "sha": "def456",
+        },
+        {
+            "path": "image.png",
+            "type": "blob",
+            "size": 500,
+            "sha": "ghi789",
+        },
+        {
+            "path": "node_modules/package.py",
+            "type": "blob",
+            "size": 100,
+            "sha": "jkl012",
+        },
+        {
+            "path": "datasets/training.py",
+            "type": "blob",
+            "size": 100,
+            "sha": "mno345",
+        },
+        {
+            "path": "large.py",
+            "type": "blob",
+            "size": 6 * 1024 * 1024,
+            "sha": "pqr678",
+        },
+        {
+            "path": "src",
+            "type": "tree",
+        },
+        {
+            "path": "boundary.py",
+            "type": "blob",
+            "size": 5 * 1024 * 1024,
+            "sha": "boundary123",
+        }
+    ]
+
+    result = filter_repository_files(tree)
+
+    result_paths = [file["path"] for file in result]
+
+    assert result_paths == ["main.py", "README.md", "boundary.py"]
+
+def test_get_file_content_small_file():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          mock_response = mock_get.return_value
+
+          mock_response.json.return_value = {
+               "encoding" : "base64",
+               "content" : "aGVsbG8="
+          }
+
+          content = get_file_content(
+               owner="psf",
+               repository="requests",
+               file_path="README.md",
+               sha="abc123",
+               size=100
+          )
+
+          assert content == "hello"
+
+          expected_url = "https://api.github.com/repos/psf/requests/contents/README.md"
+
+        # assert_called_once_with: was the mocked function called exactly once with the expected arguments.
+          mock_get.assert_called_once_with(expected_url, timeout=30)
+
+def test_get_file_content_large_file():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          mock_response = mock_get.return_value
+          mock_response.json.return_value = {
+               "encoding" : "base64",
+               "content" : "aGVsbG8="
+          }
+
+          content = get_file_content(
+               owner="psf",
+               repository="requests",
+               file_path="large.py",
+               sha="xyz789",
+               size=2*1024*1024
+          )
+
+          assert content == "hello"
+
+          expected_url = "https://api.github.com/repos/psf/requests/git/blobs/xyz789"
+
+          mock_get.assert_called_once_with(expected_url, timeout=30)
+
+def test_get_file_content_invalid_base64():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          mock_response = mock_get.return_value
+          mock_response.json.return_value = {
+               "encoding" : "base64",
+               "content" : "hello@123"
+          }
+
+          with pytest.raises(binascii.Error):
+               get_file_content(
+                    owner="psf",
+                    repository="requests",
+                    file_path="README.md",
+                    sha="abc123",
+                    size=100
+               )
+
+def test_get_repository_metadata():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          mock_response = mock_get.return_value
+          expected_metadata = {
+               "full_name" : "psf/requests",
+               "default_branch" : "main",
+               "description" : "A simple HTTP library"
+          }
+
+          mock_response.json.return_value = expected_metadata
+
+          result = get_repository_metadata(
+               owner="psf", repository="requests"
+          )
+
+          assert result == expected_metadata
+
+          mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests", timeout=30)
+
+def test_get_repository_tree():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+        mock_response = mock_get.return_value
+        expected_tree = {
+                "tree": [
+                    {
+                        "path": "README.md",
+                        "type": "blob",
+                        "sha": "abc123",
+                        "size": 100,
+                    },
+                    {
+                        "path": "src",
+                        "type": "tree",
+                    },
+                ],
+                "truncated": False,
+        }
+        mock_response.json.return_value = expected_tree
+
+        result = get_repository_tree(owner="psf", repository="requests", branch="main")
+
+        assert result == expected_tree
+
+        mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests/git/trees/main?recursive=1", timeout=30)
+
+def test_retrieve_repository_files_success():
+    files = [
+          {
+            "path": "README.md",
+            "sha": "abc123",
+            "size": 100,
+        },
+        {
+            "path": "main.py",
+            "sha": "def456",
+            "size": 200,
+        },
+    ]
+    with patch("app.ingestion.github_ingestion.get_file_content") as mock_get_content:
+        mock_get_content.side_effect = [
+             "# Project README",
+             "print('Hello World')"
+        ]
+
+        result = retrieve_repository_files(
+             owner="psf",
+             repository="requests",
+             files=files
+        )
+
+        assert len(result["successful_files"]) == 2
+        assert len(result["failed_files"]) == 0
+
+        assert result["successful_files"][0]["content"] == "# Project README"
+        assert result["successful_files"][1]["content"] == "print('Hello World')"
+
+        assert mock_get_content.call_count == 2
+
+def test_retrieve_repository_files_failed():
+    files = [
+        {
+            "path": "README.md",
+            "size": 100,
+            "sha": "abc123",
+        },
+        {
+            "path": "invalid.py",
+            "size": 100,
+            "sha": "def456",
+        },
+        {
+            "path": "setup.py",
+            "size": 100,
+            "sha": "ghi789",
+        },
+    ]
+
+    with patch("app.ingestion.github_ingestion.get_file_content") as mock_get_content:
+        mock_get_content.side_effect = [
+            "# Project README",
+            httpx.HTTPStatusError(
+                "Simulated download failure",
+                request=httpx.Request(
+                    "GET",
+                    "https://api.github.com",
+                ),
+                response=httpx.Response(404),
+            ),
+            "print('Setup')"
+        ]
+        result = retrieve_repository_files(owner="psf", repository="requests", files=files)
+
+        assert len(result["successful_files"]) == 2
+        assert len(result["failed_files"]) == 1
+
+        assert result["successful_files"][0]["path"] == "README.md"
+        assert result["successful_files"][1]["path"] == "setup.py"
+
+        assert result["failed_files"][0]["path"] == "invalid.py"
+
+        assert mock_get_content.call_count == 3
+
+def test_retrieve_repository_files_unexpected_error():
+     files = [
+          {
+               "path" : "main.py",
+               "size" : 100,
+               "sha" : "abc123"
+          }
+     ]
+
+     with patch("app.ingestion.github_ingestion.get_file_content") as mock_get_content:
+          mock_get_content.side_effect = TypeError("Unexpected programming error")
+
+          with pytest.raises(TypeError, match="Unexpected programming error"):
+               retrieve_repository_files(owner="psf", repository="requests", files=files)
+    
