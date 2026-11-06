@@ -1,6 +1,7 @@
 import httpx
 from pathlib import PurePosixPath
 import base64
+import time
 
 import logging
 
@@ -16,6 +17,9 @@ GITHUB_HEADERS = {
 }
 
 def verify_github_authentication() -> bool:
+    if not GITHUB_TOKEN:
+        raise RuntimeError("GITHUB_TOKEN is missing. Configure it in your .env file")
+    
     url = "https://api.github.com/user"
 
     response = httpx.get(url, headers=GITHUB_HEADERS, timeout=30)
@@ -26,10 +30,26 @@ def verify_github_authentication() -> bool:
 logger = logging.getLogger(__name__)
 
 
+def github_request(url: str) -> httpx.Response:
+    response = httpx.get(
+        url, headers=GITHUB_HEADERS, timeout=30
+    )
+
+    remaining = response.headers.get("x-ratelimit-remaining")
+
+    if remaining == "0":
+        reset_time = int(response.headers["x-ratelimit-reset"])
+        wait_time = max(0, reset_time - time.time())
+        time.sleep(wait_time)
+
+    response.raise_for_status()
+    return response
+
+
 def get_repository_metadata(owner: str, repository: str) -> dict:
     url = f"https://api.github.com/repos/{owner}/{repository}"
 
-    response = httpx.get(url, headers=GITHUB_HEADERS, timeout=30)
+    response = github_request(url)
 
     response.raise_for_status()
     return response.json()
@@ -38,7 +58,7 @@ def get_repository_tree(owner: str, repository:str, branch: str) -> list:
     url = (
         f"https://api.github.com/repos/{owner}/{repository}/git/trees/{branch}?recursive=1"
     )
-    response = httpx.get(url, headers=GITHUB_HEADERS,timeout=30)
+    response = github_request(url)
     response.raise_for_status()
 
     return response.json()
@@ -101,7 +121,7 @@ def get_file_content(owner: str, repository: str, file_path: str, sha: str, size
         url = f"https://api.github.com/repos/{owner}/{repository}/contents/{file_path}"
     else:
         url = f"https://api.github.com/repos/{owner}/{repository}/git/blobs/{sha}"
-    response = httpx.get(url, headers=GITHUB_HEADERS,timeout=30)
+    response = github_request(url)
     response.raise_for_status()
 
     file_data = response.json()

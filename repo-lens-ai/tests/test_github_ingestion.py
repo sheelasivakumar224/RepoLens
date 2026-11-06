@@ -322,3 +322,11 @@ def test_application_startup_fails_without_github_authentication():
         with pytest.raises(httpx.HTTPStatusError):
             with TestClient(app):
                 pass
+
+def test_verify_github_authentication_missing_token():
+     with patch("app.ingestion.github_ingestion.GITHUB_TOKEN", None):
+          with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+            with pytest.raises(RuntimeError, match="GITHUB_TOKEN is missing"):
+                    verify_github_authentication()
+
+            mock_get.assert_not_called()
