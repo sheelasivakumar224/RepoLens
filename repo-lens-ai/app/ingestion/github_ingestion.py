@@ -31,19 +31,44 @@ logger = logging.getLogger(__name__)
 
 
 def github_request(url: str) -> httpx.Response:
-    response = httpx.get(
-        url, headers=GITHUB_HEADERS, timeout=30
-    )
+    max_retries = 3
 
-    remaining = response.headers.get("x-ratelimit-remaining")
+    for attempt in range(max_retries+1):
+        response = httpx.get(
+        url, headers=GITHUB_HEADERS, timeout=30)
 
-    if remaining == "0":
-        reset_time = int(response.headers["x-ratelimit-reset"])
-        wait_time = max(0, reset_time - time.time())
-        time.sleep(wait_time)
+        remaining = response.headers.get("x-ratelimit-remaining")
 
-    response.raise_for_status()
-    return response
+        # primary rate-limit
+        if response.status_code in (403, 429) and remaining == "0":
+            if attempt == max_retries:
+                break
+
+            reset_time = int(response.headers["x-ratelimit-reset"])
+            wait_time = max(0, reset_time - time.time())
+            time.sleep(wait_time)
+            continue
+
+        # secondary rate-limit
+        if response.status_code in (403, 429):
+            retry_after = response.headers.get("Retry-After")
+            
+            if retry_after:
+                wait_time = int(retry_after)
+            elif "secondary rate limit" in response.json().get("message", "").lower():
+                wait_time = 60 * (2**attempt)
+            else:
+                response.raise_for_status()
+
+            if attempt == max_retries:
+                response.raise_for_status()
+            time.sleep(wait_time)
+            continue
+
+        response.raise_for_status()
+        return response
+
+    raise RuntimeError("Github APi request failed after maximum retries")
 
 
 def get_repository_metadata(owner: str, repository: str) -> dict:

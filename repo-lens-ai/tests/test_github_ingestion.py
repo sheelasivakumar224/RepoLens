@@ -3,7 +3,8 @@ from app.ingestion.github_ingestion import (
     get_repository_tree,
     get_file_content,
     filter_repository_files,
-    retrieve_repository_files, verify_github_authentication
+    retrieve_repository_files, verify_github_authentication,
+    github_request
 )
 
 from app.ingestion.github_ingestion import GITHUB_HEADERS
@@ -330,3 +331,138 @@ def test_verify_github_authentication_missing_token():
                     verify_github_authentication()
 
             mock_get.assert_not_called()
+
+def test_github_request_success():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          mock_response = mock_get.return_value
+          mock_response.status_code = 200
+          mock_response.headers = {
+               "x-ratelimit-remaining" : "100"
+          }
+
+          result = github_request("https://api.github.com/user")
+
+          assert result == mock_response
+          mock_response.raise_for_status.assert_called_once()
+          mock_get.assert_called_once()
+
+def test_github_request_primary_rate_limit():
+     with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+          with patch("app.ingestion.github_ingestion.time.time", return_value = 1000):
+               with patch("app.ingestion.github_ingestion.time.sleep") as mock_sleep:
+                    rate_limited_response = httpx.Response(
+                         403, 
+                         headers={
+                              "x-ratelimit-remaining":"0",
+                              "x-ratelimit-reset" : "1060"
+                         },
+                         request=httpx.Request("GET", "https://api.github.com/user"),
+                    )
+
+                    success_response = httpx.Response(
+                         200, 
+                         request = httpx.Request("GET", "https://api.github.com/user"),
+                    )
+
+                    mock_get.side_effect = [
+                         rate_limited_response,
+                         success_response
+                    ]
+
+                    result = github_request("https://api.github.com/user")
+
+                    assert result.status_code == 200
+                    mock_sleep.assert_called_once_with(60)
+                    assert mock_get.call_count == 2
+
+def test_github_request_secondary_rate_limit():
+    with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+        with patch("app.ingestion.github_ingestion.time.sleep") as mock_sleep:
+
+            rate_limited_response = httpx.Response(
+                429,
+                headers={"Retry-After": "60"},
+                json={"message": "Secondary rate limit"},
+                request=httpx.Request("GET", "https://api.github.com/user"),
+            )
+
+            success_response = httpx.Response(
+                200,
+                request=httpx.Request("GET", "https://api.github.com/user"),
+            )
+
+            mock_get.side_effect = [
+                rate_limited_response,
+                success_response,
+            ]
+
+            result = github_request("https://api.github.com/user")
+
+            assert result.status_code == 200
+            mock_sleep.assert_called_once_with(60)
+            assert mock_get.call_count == 2
+
+def test_github_request_secondary_rate_limit_backoff():
+    with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+        with patch("app.ingestion.github_ingestion.time.sleep") as mock_sleep:
+
+            rate_limited_response = httpx.Response(
+                403,
+                json={"message": "You have exceeded a secondary rate limit."},
+                request=httpx.Request("GET", "https://api.github.com/user"),
+            )
+
+            success_response = httpx.Response(
+                200,
+                request=httpx.Request("GET", "https://api.github.com/user"),
+            )
+
+            mock_get.side_effect = [
+                rate_limited_response,
+                success_response,
+            ]
+
+            result = github_request("https://api.github.com/user")
+
+            assert result.status_code == 200
+            mock_sleep.assert_called_once_with(60)
+            assert mock_get.call_count == 2
+
+def test_github_request_permission_error():
+    with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+        with patch("app.ingestion.github_ingestion.time.sleep") as mock_sleep:
+
+            error_response = httpx.Response(
+                403,
+                json={"message": "Resource not accessible by integration"},
+                request=httpx.Request("GET", "https://api.github.com/user"),
+            )
+
+            mock_get.return_value = error_response
+
+            with pytest.raises(httpx.HTTPStatusError):
+                github_request("https://api.github.com/user")
+
+            mock_get.assert_called_once()
+            mock_sleep.assert_not_called()
+        
+def test_github_request_max_retries_exhausted():
+    with patch("app.ingestion.github_ingestion.httpx.get") as mock_get:
+        with patch("app.ingestion.github_ingestion.time.sleep") as mock_sleep:
+
+            rate_limited_response = httpx.Response(
+                403,
+                json={"message": "You have exceeded a secondary rate limit."},
+                request=httpx.Request("GET", "https://api.github.com/user"),
+            )
+
+            mock_get.return_value = rate_limited_response
+
+            with pytest.raises(httpx.HTTPStatusError):
+                github_request("https://api.github.com/user")
+
+            assert mock_get.call_count == 4
+            assert mock_sleep.call_count == 3
+            assert [call.args[0] for call in mock_sleep.call_args_list] == [
+                60, 120, 240
+            ]
