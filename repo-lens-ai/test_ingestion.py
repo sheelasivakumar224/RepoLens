@@ -93,6 +93,6 @@ import httpx
 # print("Failed:", len(test_results["failed_files"]))
 # print("Failed file:", test_results["failed_files"][0]["path"])
 
-result = get_file_content("sheelasivakumar224", "Loan-Default-Prediction---Python", "requirements.txt",'06d441108935cc10c1a98e058366ff3941002a9a', 31)
+# result = get_file_content("sheelasivakumar224", "Loan-Default-Prediction---Python", "requirements.txt",'06d441108935cc10c1a98e058366ff3941002a9a', 31)
 
-print(result)
+# print(result)
