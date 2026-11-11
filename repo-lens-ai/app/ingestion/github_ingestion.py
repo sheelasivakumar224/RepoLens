@@ -169,11 +169,11 @@ def retrieve_repository_files(owner:str, repository: str, files: list) -> dict:
 
         try:
             content = get_file_content(owner = owner, repository = repository, file_path = file_path, sha=file["sha"], size=file["size"])
-            successful_files.append({"path": file_path, "content": content, "size": file["size"]})
+            successful_files.append({"path": file_path, "content": content, "size": file["size"], "sha": file["sha"]})
             logger.info("Successfully retrieved %s", file_path)
 
         except (httpx.HTTPError, ValueError, KeyError) as error:
-            failed_files.append({"path": file_path, "error": str(error)})
+            failed_files.append({"path": file_path, "sha": file.get("sha"), "size": file.get("size", 0),"error": str(error)})
             logger.error("Failed to retrieve %s: %s", file_path, error)
 
 
