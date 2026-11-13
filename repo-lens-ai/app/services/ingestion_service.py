@@ -1,6 +1,13 @@
 from app.database.models.repository import Repository, IngestionStatus
 from app.database.models.repository_file import RepositoryFile, FileStatus
+
 from app.storage.base import FileStorage
+
+from app.ingestion.github_ingestion import (
+    get_repository_metadata, get_repository_tree, retrieve_repository_files, filter_repository_files, get_repository_commit
+)
+
+from app.services.github_service import verify_github_repository
 
 async def create_repository_record(
         full_name: str,
@@ -63,7 +70,7 @@ async def save_failed_file(
     return repository_file
 
 async def update_repository_progress(
-        repository: RepositoryFile,
+        repository: Repository,
         completed_files: int = 0,
         failed_files: int = 0
 ) -> Repository:
@@ -72,6 +79,46 @@ async def update_repository_progress(
 
     await repository.save()
     return repository
+
+def verify_repository_for_ingestion(url: str):
+    repository_info = verify_github_repository(url)
+
+    if not repository_info.exists:
+        raise ValueError(repository_info.message)
+
+    return repository_info
+
+def extract_owner_and_repository(full_name: str) -> tuple[str, str]:
+    owner, repository = full_name.split("/", maxsplit=1)
+    return owner, repository
+
+async def ingest_github_repository(url: str, storage: FileStorage) -> Repository:
+    repository_info = verify_repository_for_ingestion(url)
+    owner, repository_name = extract_owner_and_repository(repository_info.full_name)
+    metadata = get_repository_metadata(owner=owner,repository=repository_name)
+
+    default_branch = metadata["default_branch"]
+
+    commit_data = get_repository_commit(owner=owner, repository=repository_name, branch=default_branch)
+
+    commit_sha = commit_data["sha"]
+    tree_sha = commit_data["commit"]["tree"]["sha"]
+
+    tree_data = get_repository_tree(owner=owner, repository=repository_name, tree_sha=tree_sha)
+
+    filtered_files = filter_repository_files(tree_data["tree"])
+
+    ingestion_result = retrieve_repository_files(owner=owner, repository=repository_name, filtered_files=filtered_files)
+
+    saved_repository = await persist_ingestion_results(
+        full_name=repository_info.full_name,
+        commit_sha=commit_sha,
+        default_branch=default_branch,
+        ingestion_results=ingestion_result,
+        storage=storage
+    )
+
+    return saved_repository
 
 async def persist_ingestion_results(
         full_name: str,

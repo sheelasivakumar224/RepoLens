@@ -179,11 +179,11 @@ def test_get_repository_tree():
         }
         mock_response.json.return_value = expected_tree
 
-        result = get_repository_tree(owner="psf", repository="requests", branch="main")
+        result = get_repository_tree(owner="psf", repository="requests", tree_sha="abc123")
 
         assert result == expected_tree
 
-        mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests/git/trees/main?recursive=1", headers = GITHUB_HEADERS, timeout=30)
+        mock_get.assert_called_once_with("https://api.github.com/repos/psf/requests/git/trees/abc123?recursive=1", headers = GITHUB_HEADERS, timeout=30)
 
 def test_retrieve_repository_files_success():
     files = [

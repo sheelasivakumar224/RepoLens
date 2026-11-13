@@ -79,9 +79,9 @@ def get_repository_metadata(owner: str, repository: str) -> dict:
     response.raise_for_status()
     return response.json()
 
-def get_repository_tree(owner: str, repository:str, branch: str) -> list:
+def get_repository_tree(owner: str, repository:str, tree_sha: str) -> list:
     url = (
-        f"https://api.github.com/repos/{owner}/{repository}/git/trees/{branch}?recursive=1"
+        f"https://api.github.com/repos/{owner}/{repository}/git/trees/{tree_sha}?recursive=1"
     )
     response = github_request(url)
     response.raise_for_status()
@@ -181,3 +181,8 @@ def retrieve_repository_files(owner:str, repository: str, files: list) -> dict:
         "successful_files" : successful_files,
         "failed_files" : failed_files
     }
+
+def get_repository_commit(owner: str, repository: str, branch: str) -> dict:
+    url = (f"https://api.github.com/repos/{owner}/{repository}/commits/{branch}")
+    response = github_request(url)
+    return response.json()
