@@ -17,7 +17,7 @@ def check_existing_repository(
     repository: Repository
 ) -> bool:
 
-    if repository.status == IngestionStatus.COMPLETED:
+    if repository.status == IngestionStatus.COMPLETED and repository.failed_files == 0:
         return True
 
     if repository.status == IngestionStatus.IN_PROGRESS:
@@ -152,7 +152,7 @@ async def ingest_github_repository(url: str, storage: FileStorage) -> Repository
 
         filtered_files = filter_repository_files(tree_data["tree"])
 
-        ingestion_result = retrieve_repository_files(owner=owner, repository=repository_name, filtered_files=filtered_files)
+        ingestion_result = retrieve_repository_files(owner=owner, repository=repository_name, files=filtered_files)
 
         saved_repository = await persist_ingestion_results(
             full_name=repository_info.full_name,

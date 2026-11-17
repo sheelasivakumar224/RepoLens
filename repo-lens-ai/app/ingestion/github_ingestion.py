@@ -154,8 +154,10 @@ def get_file_content(owner: str, repository: str, file_path: str, sha: str, size
     if file_data.get("encoding") != "base64":
         raise ValueError("Unsupported file encoding")
 
+    encoded_content = "".join(file_data["content"].split())
+
     # validate=True: Makes Base64 decoding stricter by rejecting invalid characters instead of silently ignoring them.
-    decoded_content = base64.b64decode(file_data["content"], validate=True)
+    decoded_content = base64.b64decode(encoded_content, validate=True)
 
     return decoded_content.decode("utf-8")
 
