@@ -92,7 +92,7 @@ ALLOWED_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx",
     ".md", ".rst", ".txt",
     ".json", ".yaml", ".yml", ".toml",
-    ".sql",
+    ".sql",".ipynb"
 }
 
 EXCLUDED_DIRECTORIES = {
