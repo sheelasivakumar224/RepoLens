@@ -210,3 +210,29 @@ async def test_save_failed_file(database):
     assert result.status == FileStatus.FAILED
     assert result.error == "Github API request failed"
     assert result.storage_path is None # This ensures it is not stored in the local storage.
+
+@pytest.mark.asyncio
+async def test_get_repository_files_by_repository(database):
+    repository = Repository(
+        full_name="test/repolens",
+        commit_sha="abc123",
+        default_branch="main"
+    )
+
+    await repository.insert()
+
+    repository_file = RepositoryFile(
+        repository=repository,
+        path="app/main.py",
+        github_sha="file123",
+        size=1024
+    )
+
+    await repository_file.insert()
+
+    results = await RepositoryFile.find(
+        RepositoryFile.repository.id == repository.id
+    ).to_list()
+
+    assert len(results) == 1
+    assert results[0].path == "app/main.py"

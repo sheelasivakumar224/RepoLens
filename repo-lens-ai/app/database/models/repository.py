@@ -4,6 +4,8 @@ from enum import Enum
 from beanie import Document
 from pydantic import Field
 
+from pymongo import ASCENDING, IndexModel
+
 class IngestionStatus(str, Enum):
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
@@ -22,3 +24,13 @@ class Repository(Document):
     updated_at: datetime = Field(default_factory = lambda:  datetime.now(timezone.utc))
     class Settings:
         name = "repositories"
+
+        indexes = [
+            IndexModel(
+                [
+                    ("full_name", ASCENDING),
+                    ("commit_sha", ASCENDING)
+                ],
+                unique=True
+            )
+        ]
