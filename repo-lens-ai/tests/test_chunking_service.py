@@ -1,7 +1,9 @@
 import tree_sitter
 import tree_sitter_python
 
-from app.services.chunking_service import extract_python_structures, count_tokens, split_oversized_content, tokenizer, extract_class_members, chunk_repository_file, extract_attribute_name
+from app.services.chunking.python_chunker import extract_python_structures, extract_class_members, extract_attribute_name, chunk_python_file
+
+from app.services.chunking.chunking_utils import count_tokens, split_oversized_content, tokenizer
 
 def test_tree_sitter_python_parser():
     language = tree_sitter.Language(tree_sitter_python.language())
@@ -107,7 +109,7 @@ class Calculator:
     assert "decorated_definition" in member_types
     assert "class_definition" in member_types
 
-def test_chunk_repository_file_creates_standalone_function_chunk():
+def test_chunk_python_file_creates_standalone_function_chunk():
 
     extracted_file = {
         "path": "calculator.py",
@@ -118,7 +120,7 @@ def multiply(a, b):
         "extension": ".py"
     }
 
-    chunks = chunk_repository_file(
+    chunks = chunk_python_file(
         extracted_file=extracted_file,
         repository_name="test-repo"
     )
@@ -135,7 +137,7 @@ def multiply(a, b):
     assert chunk.chunk_index == 0
     assert "return a * b" in chunk.content
 
-def test_chunk_repository_file_splits_oversized_function():
+def test_chunk_python_file_splits_oversized_function():
 
     function_content = (
         "def calculate_total():\n"
@@ -151,7 +153,7 @@ def test_chunk_repository_file_splits_oversized_function():
         "extension": ".py"
     }
 
-    chunks = chunk_repository_file(
+    chunks = chunk_python_file(
         extracted_file=extracted_file,
         repository_name="test-repo"
     )
@@ -164,7 +166,7 @@ def test_chunk_repository_file_splits_oversized_function():
         assert chunk.chunk_type == "function"
 
 
-def test_chunk_repository_file_creates_class_chunk():
+def test_chunk_python_file_creates_class_chunk():
 
     extracted_file = {
         "path": "calculator.py",
@@ -181,7 +183,7 @@ class Calculator:
         "extension": ".py"
     }
 
-    chunks = chunk_repository_file(
+    chunks = chunk_python_file(
         extracted_file=extracted_file,
         repository_name="test-repo"
     )
@@ -219,7 +221,7 @@ def test_oversized_class_extracts_members():
         "extension": ".py"
     }
 
-    chunks = chunk_repository_file(
+    chunks = chunk_python_file(
         extracted_file=extracted_file,
         repository_name="test-repo"
     )
