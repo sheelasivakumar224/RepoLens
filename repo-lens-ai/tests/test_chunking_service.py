@@ -382,3 +382,28 @@ def test_chunk_repository_file_unsupported_extension():
     )
 
     assert result == []
+
+def test_chunk_repository_file_jsx():
+    extracted_file = {
+        "path": "components/App.jsx",
+        "content": "const App = () => <h1>Hello</h1>;",
+        "extension": ".jsx"
+    }
+
+    with patch(
+        "app.services.chunking_service.chunk_jsx_file"
+    ) as mock_chunker:
+
+        mock_chunker.return_value = ["jsx_chunk"]
+
+        result = chunk_repository_file(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        mock_chunker.assert_called_once_with(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        assert result == ["jsx_chunk"]

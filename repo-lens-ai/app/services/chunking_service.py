@@ -3,6 +3,7 @@ from app.schemas.chunk import Chunk
 from app.services.chunking.python_chunker import chunk_python_file
 from app.services.chunking.javascript_chunker import chunk_javascript_file
 from app.services.chunking.typescript_chunker import chunk_typescript_file
+from app.services.chunking.jsx_chunker import chunk_jsx_file
 
 def chunk_repository_file(
     extracted_file: dict,
@@ -23,6 +24,11 @@ def chunk_repository_file(
 
     elif extension in [".ts", ".tsx"]:
         return chunk_typescript_file(
+            extracted_file=extracted_file,
+            repository_name=repository_name
+        )
+    elif extension == ".jsx":
+        return chunk_jsx_file(
             extracted_file=extracted_file,
             repository_name=repository_name
         )
