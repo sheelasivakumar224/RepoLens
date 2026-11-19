@@ -5,6 +5,10 @@ from app.services.chunking.python_chunker import extract_python_structures, extr
 
 from app.services.chunking.chunking_utils import count_tokens, split_oversized_content, tokenizer
 
+from app.services.chunking_service import chunk_repository_file
+
+from unittest.mock import patch
+
 def test_tree_sitter_python_parser():
     language = tree_sitter.Language(tree_sitter_python.language())
     parser = tree_sitter.Parser(language)
@@ -264,3 +268,117 @@ def test_extract_attribute_name():
     attribute_name = extract_attribute_name(attribute_member)
 
     assert attribute_name == "VERSION"
+
+def test_chunk_repository_file_python():
+    extracted_file = {
+        "extension": ".py",
+        "content": "def hello(): pass",
+        "path": "hello.py"
+    }
+
+    with patch(
+        "app.services.chunking_service.chunk_python_file"
+    ) as mock_chunker:
+
+        mock_chunker.return_value = []
+
+        result = chunk_repository_file(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        mock_chunker.assert_called_once_with(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        assert result == []
+
+def test_chunk_repository_file_javascript():
+    extracted_file = {
+        "extension": ".js",
+        "content": "function hello() {}",
+        "path": "hello.js"
+    }
+
+    with patch(
+        "app.services.chunking_service.chunk_javascript_file"
+    ) as mock_chunker:
+
+        mock_chunker.return_value = []
+
+        result = chunk_repository_file(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        mock_chunker.assert_called_once_with(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        assert result == []
+
+def test_chunk_repository_file_typescript():
+    extracted_file = {
+        "extension": ".ts",
+        "content": "interface User { name: string; }",
+        "path": "user.ts"
+    }
+
+    with patch(
+        "app.services.chunking_service.chunk_typescript_file"
+    ) as mock_chunker:
+
+        mock_chunker.return_value = []
+
+        result = chunk_repository_file(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        mock_chunker.assert_called_once_with(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        assert result == []
+
+def test_chunk_repository_file_tsx():
+    extracted_file = {
+        "extension": ".tsx",
+        "content": "const App = () => <div>Hello</div>;",
+        "path": "App.tsx"
+    }
+
+    with patch(
+        "app.services.chunking_service.chunk_typescript_file"
+    ) as mock_chunker:
+
+        mock_chunker.return_value = []
+
+        result = chunk_repository_file(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        mock_chunker.assert_called_once_with(
+            extracted_file=extracted_file,
+            repository_name="test-repo"
+        )
+
+        assert result == []
+
+def test_chunk_repository_file_unsupported_extension():
+    extracted_file = {
+        "extension": ".html",
+        "content": "<h1>Hello</h1>",
+        "path": "index.html"
+    }
+
+    result = chunk_repository_file(
+        extracted_file=extracted_file,
+        repository_name="test-repo"
+    )
+
+    assert result == []
